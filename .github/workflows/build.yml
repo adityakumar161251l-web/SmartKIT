@@ -17,20 +17,96 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Unzip Project and Build Setup
+      - name: Prepare Project and WebView Wrapper
         run: |
-          echo "Extracting SmartKIT project..."
+          echo "Setting up Android project structure..."
+          mkdir -p app/src/main/assets app/src/main/java/com/smartkit/app
+          
+          # ज़िप को अनपैक करके सभी फाइलों को एसेट्स में डालना
           unzip -q "*.zip" -d extracted_project
-          mkdir -p app/src/main/assets
-          # ज़िप के अंदर की मुख्य फाइलों को एसेट्स में कॉपी करना
           cp -r extracted_project/*/* app/src/main/assets/ || cp -r extracted_project/* app/src/main/assets/ || true
+          
+          # Android Native Bridge (MainActivity.java) तैयार करना
+          cat << 'EOF' > app/src/main/java/com/smartkit/app/MainActivity.java
+          package com.smartkit.app;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.app.Activity;
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("file:///android_asset/index.html");
+                  setContentView(webView);
+              }
+          }
+          EOF
 
-      - name: List Files for Verification
-        run: ls -la app/src/main/assets/
+          # साधारण AndroidManifest.xml बनाना ताकि APK बन सके
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.smartkit.app">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                  android:label="SmartKIT"
+                  android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
-      - name: Upload Workspace Artifact
+          # build.gradle फाइल बनाना
+          cat << 'EOF' > build.gradle
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.smartkit.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.smartkit.app"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          dependencies {}
+          EOF
+
+          echo "include ':app'" > settings.gradle
+
+          # Gradle Wrapper जनरेट करना
+          gradle wrapper
+
+      - name: Build APK with Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SmartKIT-AppFiles
-          path: app/src/main/assets/
+          name: SmartKIT-Real-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
           
