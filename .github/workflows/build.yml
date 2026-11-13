@@ -1,0 +1,36 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Unzip Project and Build Setup
+        run: |
+          echo "Extracting SmartKIT project..."
+          unzip -q "*.zip" -d extracted_project
+          mkdir -p app/src/main/assets
+          # ज़िप के अंदर की मुख्य फाइलों को एसेट्स में कॉपी करना
+          cp -r extracted_project/*/* app/src/main/assets/ || cp -r extracted_project/* app/src/main/assets/ || true
+
+      - name: List Files for Verification
+        run: ls -la app/src/main/assets/
+
+      - name: Upload Workspace Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartKIT-AppFiles
+          path: app/src/main/assets/
+          
